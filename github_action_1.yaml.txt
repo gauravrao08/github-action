@@ -1,0 +1,73 @@
+name: aws_dev_deploy
+concurrency: aws_dev
+on:
+  workflow_dispatch:
+    inputs:
+      all_regions:
+        required: false
+        type: boolean
+        default: false
+      us-east-1:
+        required: false
+        type: boolean
+        default: true
+      terraform_version:
+        description: Terraform version to use
+        type: choice
+        required: true
+        default: 1.2.1
+        options:
+          - 1.2.1
+      operation:
+        description: Operation to perform
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - apply
+    secrets:
+      git_token:
+        required: true
+      conjur_username:
+        required: true
+      conjur_api_key:
+        required: true
+
+jobs:
+  plan_base:
+    strategy:
+      max-parallel: 1
+      matrix:
+        resources: ["hc_iam"]
+    uses: HybridCloudIT/github-workflows/.github/workflows/aws-dry-run-global.yml@v0.0.1
+    with:
+      lifecycle: dev
+      terraform_version: ${{ inputs.terraform_version }}
+      client_name: ${{ github.event.repository.name }}
+      resource: ${{ matrix.resources }}
+      # https://github.com/actions/runner/issues/1483
+    secrets:
+      git_token: ${{ secrets.GIT_TOKEN }}
+      conjur_username: ${{ secrets.CONJUR_USERNAME }}
+      conjur_api_key: ${{ secrets.CONJUR_API_KEY }}
+
+  apply_base:
+    if: ${{ inputs.operation == 'apply' || false }}
+    strategy:
+      max-parallel: 1
+      matrix:
+        resources: ["hc_iam"]
+    uses: HybridCloudIT/github-workflows/.github/workflows/aws-deploy-global.yml@v0.0.1
+    needs: plan_base
+    with:
+      lifecycle: dev
+      terraform_version: ${{ inputs.terraform_version }}
+      client_name: ${{ github.event.repository.name }}
+      resource: ${{ matrix.resources }}
+      extra_args: "-a"
+      # https://github.com/actions/runner/issues/1483
+    secrets:
+      git_token: ${{ secrets.GIT_TOKEN }}
+      conjur_username: ${{ secrets.CONJUR_USERNAME }}
+      conjur_api_key: ${{ secrets.CONJUR_API_KEY }}
