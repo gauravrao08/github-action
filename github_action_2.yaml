@@ -1,0 +1,71 @@
+name: aws_dev_destroy
+concurrency: aws_dev
+on:
+  workflow_dispatch:
+    inputs:
+      all_regions:
+        required: false
+        type: boolean
+        default: false
+      us-east-1:
+        required: false
+        type: boolean
+        default: false
+      operation:
+        description: Operation to perform
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - destroy
+    secrets:
+      git_token:
+        required: true
+      conjur_username:
+        required: true
+      conjur_api_key:
+        required: true
+
+env:
+  LIFECYCLE: dev
+  TERRAFORM_VERSION: 1.2.1
+
+jobs:
+  plan_base:
+    strategy:
+      max-parallel: 1
+      matrix:
+        resources: ["hc_iam"]
+    uses: HybridCloudIT/github-workflows/.github/workflows/aws-dry-run-global.yml@v0.0.1
+    with:
+      lifecycle: $LIFECYCLE
+      terraform_version: $TERRAFORM_VERSION
+      client_name: ${{ github.event.repository.name }}
+      resource: ${{ matrix.resources }}
+      extra_args: "-d"
+      # https://github.com/actions/runner/issues/1483
+    secrets:
+      git_token: ${{ secrets.GIT_TOKEN }}
+      conjur_username: ${{ secrets.CONJUR_USERNAME }}
+      conjur_api_key: ${{ secrets.CONJUR_API_KEY }}
+
+  destroy_base:
+    if: ${{ inputs.operation == 'destroy' || false }}
+    strategy:
+      max-parallel: 1
+      matrix:
+        resources: ["hc_iam"]
+    uses: HybridCloudIT/github-workflows/.github/workflows/aws-deploy-global.yml@v0.0.1
+    needs: plan_base
+    with:
+      lifecycle: $LIFECYCLE
+      terraform_version: $TERRAFORM_VERSION
+      client_name: ${{ github.event.repository.name }}
+      resource: ${{ matrix.resources }}
+      extra_args: "-ad"
+      # https://github.com/actions/runner/issues/1483
+    secrets:
+      git_token: ${{ secrets.GIT_TOKEN }}
+      conjur_username: ${{ secrets.CONJUR_USERNAME }}
+      conjur_api_key: ${{ secrets.CONJUR_API_KEY }}
